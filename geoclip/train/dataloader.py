@@ -1,5 +1,6 @@
 import os
 import torch
+from torchvision.transforms import ToTensor
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -48,37 +49,50 @@ class GeoDataLoader(Dataset):
     def __init__(self, dataset_file, dataset_folder, transform=None):
         self.dataset_folder = dataset_folder
         self.transform = transform
-        self.images, self.coordinates = self.load_dataset(dataset_file)
+        self.images_A, self.coordinates = self.load_dataset(dataset_file)
 
     def load_dataset(self, dataset_file):
-        try:
-            dataset_info = pd.read_csv(dataset_file)
-        except Exception as e:
-            raise IOError(f"Error reading {dataset_file}: {e}")
+        # try:
+        #     dataset_info = pd.read_csv(dataset_file)
+        # except Exception as e:
+        #     raise IOError(f"Error reading {dataset_file}: {e}")
 
-        images = []
+        dataset_info = dataset_file
+        images_A = []
+        images_B = []
+        images_C = []
         coordinates = []
 
         for _, row in tqdm(dataset_info.iterrows(), desc="Loading image paths and coordinates"):
-            filename = os.path.join(self.dataset_folder, row['IMG_FILE'])
-            if exists(filename):
-                images.append(filename)
+            file_A = os.path.join(self.dataset_folder, row['IMG_FILE_A'])
+            file_B = os.path.join(self.dataset_folder, row['IMG_FILE_B'])
+            file_C = os.path.join(self.dataset_folder, row['IMG_FILE_C'])
+            if exists(file_A) and exists(file_B) and exists(file_C):
+                images_A.append(file_A)
+                images_B.append(file_B)
+                images_C.append(file_C)
                 latitude = float(row['LAT'])
                 longitude = float(row['LON'])
-                coordinates.append((latitude, longitude))
+                heading = float(row['head'])
+                coordinates.append((latitude, longitude, heading))
 
-        return images, coordinates
+        return images_A, coordinates
 
     def __len__(self):
-        return len(self.images)
+        return len(self.images_A)
 
     def __getitem__(self, idx):
-        img_path = self.images[idx]
+        img_path_A = self.images_A[idx]
         gps = self.coordinates[idx]
 
-        image = im.open(img_path).convert('RGB')
+        image_A = im.open(img_path_A).convert('RGB')
         
         if self.transform:
-            image = self.transform(image)
+            image_A = self.transform(image_A)
+        else:
+            trans = transforms.Compose([
+                transforms.PILToTensor(),
+            ])
+            image_A = trans(image_A)
 
-        return image, gps
+        return image_A, gps
