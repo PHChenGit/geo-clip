@@ -18,6 +18,9 @@ class ImageEncoder(nn.Module):
         for param in self.CLIP.parameters():
             param.requires_grad = False
 
+        # Set output dimension
+        self.output_dim = self.mlp[-1].out_features  # This will be 512
+
     def preprocess_image(self, image):
         x = self.image_processor(images=image, return_tensors="pt")["pixel_values"]
         return x

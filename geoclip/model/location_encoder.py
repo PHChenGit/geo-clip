@@ -1,3 +1,4 @@
+from os import walk
 import torch
 import torch.nn as nn
 from .rff import GaussianEncoding
@@ -25,7 +26,7 @@ def equal_earth_projection(L):
 class LocationEncoderCapsule(nn.Module):
     def __init__(self, sigma):
         super(LocationEncoderCapsule, self).__init__()
-        rff_encoding = GaussianEncoding(sigma=sigma, input_size=2, encoded_size=256)
+        rff_encoding = GaussianEncoding(sigma=sigma, input_size=3, encoded_size=256)
         self.km = sigma
         self.capsule = nn.Sequential(rff_encoding,
                                      nn.Linear(512, 1024),
@@ -57,7 +58,8 @@ class LocationEncoder(nn.Module):
         self.load_state_dict(torch.load(f"{file_dir}/weights/location_encoder_weights.pth"))
 
     def forward(self, location):
-        location = equal_earth_projection(location)
+        # location = equal_earth_projection(location)
+        location = torch.tensor(location, dtype=torch.float32)
         location_features = torch.zeros(location.shape[0], 512).to(location.device)
 
         for i in range(self.n):
