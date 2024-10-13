@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import CLIPModel, AutoProcessor
 
 import warnings
@@ -18,6 +19,13 @@ class ImageEncoder(nn.Module):
         for param in self.CLIP.parameters():
             param.requires_grad = False
 
+        # Orientation prediction head
+        self.orientation_head = nn.Sequential(
+            nn.Linear(512, 128),
+            nn.ReLU(),
+            nn.Linear(128, 2)  # Output sin θ and cos θ
+        )
+
     def preprocess_image(self, image):
         x = self.image_processor(images=image, return_tensors="pt")["pixel_values"]
         return x
@@ -25,4 +33,12 @@ class ImageEncoder(nn.Module):
     def forward(self, x):
         x = self.CLIP.get_image_features(pixel_values=x)
         x = self.mlp(x)
-        return x
+
+        # Normalize image features
+        image_features = F.normalize(x, dim=1)
+
+        # Orientation prediction
+        orientation_pred = self.orientation_head(x)
+        # Normalize to ensure outputs lie on the unit circle
+        orientation_pred = F.normalize(orientation_pred, dim=1)
+        return x, orientation_pred

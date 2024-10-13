@@ -11,13 +11,14 @@ from PIL import Image
 from torchvision.transforms import ToPILImage
 
 class GeoCLIP(nn.Module):
-    def __init__(self, from_pretrained=True, queue_size=4096):
+    def __init__(self, from_pretrained=False, queue_size=4096):
         super().__init__()
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         self.image_encoder = ImageEncoder()
         self.location_encoder = LocationEncoder()
 
-        self.gps_gallery = load_gps_data(os.path.join(file_dir, "gps_gallery", "coordinates_100K.csv"))
+        # self.gps_gallery = load_gps_data(os.path.join(file_dir, "gps_gallery", "coordinates_100K.csv"))
+        self.gps_gallery = load_gps_data(os.path.join("/home/rvl/Documents/rvl/pohsun/datasets/with_angle/", "gps_gallery.csv"))
         self._initialize_gps_queue(queue_size)
 
         if from_pretrained:
@@ -31,6 +32,7 @@ class GeoCLIP(nn.Module):
         self.image_encoder.to(device)
         self.location_encoder.to(device)
         self.logit_scale.data = self.logit_scale.data.to(device)
+        self.gps_gallery.to(device)
         return super().to(device)
 
     def _load_weights(self):
@@ -63,6 +65,9 @@ class GeoCLIP(nn.Module):
 
     def get_gps_queue(self):
         return self.gps_queue.t()
+
+    def set_gps_gallery(self, gps_gallery):
+        self.gps_gallery = gps_gallery
                                              
     def forward(self, image, location):
         """ GeoCLIP's forward pass
@@ -76,7 +81,7 @@ class GeoCLIP(nn.Module):
         """
 
         # Compute Features
-        image_features = self.image_encoder(image)
+        image_features, orientation_pred = self.image_encoder(image)
         location_features = self.location_encoder(location)
         logit_scale = self.logit_scale.exp()
         
@@ -87,7 +92,7 @@ class GeoCLIP(nn.Module):
         # Cosine similarity (Image Features & Location Features)
         logits_per_image = logit_scale * (image_features @ location_features.t())
 
-        return logits_per_image
+        return logits_per_image, orientation_pred
 
     @torch.no_grad()
     def predict(self, image_path, top_k):
@@ -107,7 +112,7 @@ class GeoCLIP(nn.Module):
 
         gps_gallery = self.gps_gallery.to(self.device)
 
-        logits_per_image = self.forward(image, gps_gallery)
+        logits_per_image, orientation_pred = self.forward(image, gps_gallery)
         probs_per_image = logits_per_image.softmax(dim=-1).cpu()
 
         # Get top k predictions
@@ -115,4 +120,4 @@ class GeoCLIP(nn.Module):
         top_pred_gps = self.gps_gallery[top_pred.indices[0]]
         top_pred_prob = top_pred.values[0]
 
-        return top_pred_gps, top_pred_prob
+        return top_pred_gps, top_pred_prob, orientation_pred

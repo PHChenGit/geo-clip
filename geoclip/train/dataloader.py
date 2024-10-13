@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 def img_train_transform():
     train_transform_list = transforms.Compose([
         transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
+        # transforms.RandomHorizontalFlip(),
         transforms.RandomApply([transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1)], p=0.8),
         transforms.RandomGrayscale(p=0.2),
         transforms.PILToTensor(),
@@ -48,7 +48,7 @@ class GeoDataLoader(Dataset):
     def __init__(self, dataset_file, dataset_folder, transform=None):
         self.dataset_folder = dataset_folder
         self.transform = transform
-        self.images, self.coordinates = self.load_dataset(dataset_file)
+        self.images, self.coordinates, self.orientations = self.load_dataset(dataset_file)
 
     def load_dataset(self, dataset_file):
         try:
@@ -58,6 +58,7 @@ class GeoDataLoader(Dataset):
 
         images = []
         coordinates = []
+        orientations = []
 
         for _, row in tqdm(dataset_info.iterrows(), desc="Loading image paths and coordinates"):
             filename = os.path.join(self.dataset_folder, row['IMG_FILE'])
@@ -66,8 +67,10 @@ class GeoDataLoader(Dataset):
                 latitude = float(row['LAT'])
                 longitude = float(row['LON'])
                 coordinates.append((latitude, longitude))
+                head = float(row['HEAD']) # orientation
+                orientations.append(head)
 
-        return images, coordinates
+        return images, coordinates, orientations
 
     def __len__(self):
         return len(self.images)
@@ -75,10 +78,11 @@ class GeoDataLoader(Dataset):
     def __getitem__(self, idx):
         img_path = self.images[idx]
         gps = self.coordinates[idx]
+        orientation = self.orientations[idx]
 
         image = im.open(img_path).convert('RGB')
         
         if self.transform:
             image = self.transform(image)
 
-        return image, gps
+        return image, torch.tensor(gps, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)

@@ -57,10 +57,18 @@ class LocationEncoder(nn.Module):
         self.load_state_dict(torch.load(f"{file_dir}/weights/location_encoder_weights.pth"))
 
     def forward(self, location):
-        location = equal_earth_projection(location)
-        location_features = torch.zeros(location.shape[0], 512).to(location.device)
+        # location = equal_earth_projection(location)
+        # location_features = torch.zeros(location.shape[0], 512).to(location.device)
+        #
+        # for i in range(self.n):
+        #     location_features += self._modules['LocEnc' + str(i)](location)
+        x_max, y_max = 8192, 4320
+        location_norm = location.clone()
+        location_norm[:, 0] = location[:, 0] / x_max
+        location_norm[:, 1] = location[:, 1] / y_max
 
+        location_features = torch.zeros(location.shape[0], 512).to(location.device)
         for i in range(self.n):
-            location_features += self._modules['LocEnc' + str(i)](location)
+            location_features += self._modules['LocEnc' + str(i)](location_norm)
         
         return location_features
