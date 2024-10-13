@@ -30,6 +30,14 @@ def img_val_transform():
         ])
     return val_transform_list    
 
+def img_test_transform():
+    test_transform_list = transforms.Compose([
+            # transforms.Resize(256),
+            # transforms.CenterCrop(224),
+            transforms.PILToTensor(),
+        ])
+    return test_transform_list    
+
 
 class GeoDataLoader(Dataset):
     """

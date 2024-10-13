@@ -21,9 +21,9 @@ class GeoCLIP(nn.Module):
         self.gps_gallery = load_gps_data(os.path.join("/home/rvl/Documents/rvl/pohsun/datasets/with_angle/", "gps_gallery.csv"))
         self._initialize_gps_queue(queue_size)
 
-        if from_pretrained:
-            self.weights_folder = os.path.join(file_dir, "weights")
-            self._load_weights()
+        # if from_pretrained:
+        #     self.weights_folder = os.path.join(file_dir, "weights")
+        #     self._load_weights()
 
         self.device = "cpu"
 
@@ -95,7 +95,7 @@ class GeoCLIP(nn.Module):
         return logits_per_image, orientation_pred
 
     @torch.no_grad()
-    def predict(self, image_path, top_k):
+    def predict(self, image, top_k):
         """ Given an image, predict the top k GPS coordinates
 
         Args:
@@ -106,7 +106,7 @@ class GeoCLIP(nn.Module):
             top_pred_gps (torch.Tensor): Top k GPS coordinates of shape (k, 2)
             top_pred_prob (torch.Tensor): Top k GPS probabilities of shape (k,)
         """
-        image = Image.open(image_path)
+        # image = Image.open(image_path)
         image = self.image_encoder.preprocess_image(image)
         image = image.to(self.device)
 
