@@ -5,8 +5,8 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 
-def train(train_dataloader, model, optimizer, epoch, batch_size, device, scaler, scheduler=None, criterion=nn.CrossEntropyLoss()):
-    print("Starting Epoch", epoch)
+def train(train_dataloader, model, optimizer, epoch, total_epoch, batch_size, device, scaler, scheduler=None, criterion=nn.CrossEntropyLoss()):
+    # print("Starting Epoch", epoch)
 
     bar = tqdm(enumerate(train_dataloader), total=len(train_dataloader))
 
@@ -39,15 +39,18 @@ def train(train_dataloader, model, optimizer, epoch, batch_size, device, scaler,
 
         # Forward pass
         with torch.autocast(device_type="cuda"): 
-            logits_img_gps, orientation_pred = model(imgs, gps_all)
+            logits_img_gps, orientation_pred= model(imgs, gps_all)
 
             # Compute the loss
             img_gps_loss = criterion(logits_img_gps, targets_img_gps)
             # orientation_loss = torch.mean(((orientation_gt - orientation_pred + 180) % 360 - 180).square(), dtype=torch.float32).sqrt()
-            orientation_loss = torch.min(torch.abs(orientation_gt - orientation_pred).mean(), 360 - torch.abs(orientation_gt - orientation_pred).mean())
+            # orientation_loss = torch.min(torch.abs(orientation_gt - orientation_pred).mean(), 360 - torch.abs(orientation_gt - orientation_pred).mean())
+            mse_loss = nn.MSELoss()
+            orientation_loss = mse_loss(orientation_pred, orientation_gt)
+            orientation_loss = torch.sqrt(orientation_loss)
 
             alpha = 0.1 # weighting factor for orientation loss
-            loss = img_gps_loss + alpha * orientation_loss
+            loss = img_gps_loss + alpha * orientation_loss 
 
         # Backpropagate
         scaler.scale(loss).backward()
@@ -62,7 +65,7 @@ def train(train_dataloader, model, optimizer, epoch, batch_size, device, scaler,
         epoch_total_loss += loss.item()
         num_batches += 1
 
-        bar.set_description("Epoch {} loss: {:.5f}".format(epoch, loss.item()))
+        bar.set_description("Epoch {}/{} loss: {:.5f}".format(epoch, total_epoch, loss.item()))
 
     if scheduler is not None:
         scheduler.step()

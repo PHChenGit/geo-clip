@@ -70,8 +70,7 @@ def evaluate_rmse(dataloader, model, device="cpu"):
     model.eval()
     total_distance = 0.0
     total_samples = 0
-    squared_errors = []
-    orientation_errors = []
+    total_squared_orientation_error = 0
 
     with torch.no_grad():
         gps_gallery = model.gps_gallery.to(device)
@@ -79,6 +78,7 @@ def evaluate_rmse(dataloader, model, device="cpu"):
             images = images.to(device)
             true_coords = true_coords.to(device)
             orientation = orientation.to(device)
+            # orientation_gt = torch.stack(orientation, dim=1).to(device)
 
             pred_logits, orientation_pred = model(images, gps_gallery)
             probs = pred_logits.softmax(dim=-1)
@@ -93,32 +93,18 @@ def evaluate_rmse(dataloader, model, device="cpu"):
             # squared_errors.append(squared_error.detach().cpu())
 
             total_samples += images.size(0)
+            sin_theta, cos_theta = orientation_pred[:, 0], orientation_pred[:, 1]
+            rad = torch.arctan2(sin_theta, cos_theta)
+            deg_pred = torch.rad2deg(rad)
+            squared_error = (deg_pred - orientation) ** 2
+            total_squared_orientation_error = squared_error.sum().item()
 
-            # Prepare ground truth orientation
-            # Convert angles from degrees to radians
-            orientation_rad = orientation * (np.pi / 180.0)
-            # Compute sin θ and cos θ
-            sin_theta = torch.sin(orientation_rad)
-            cos_theta = torch.cos(orientation_rad)
-            orientation_gt = torch.stack((sin_theta, cos_theta), dim=1).to(device)
-
-            # Orientation Loss (MSE Loss between predicted and ground truth sin and cos values)
-            orientation_error = ((orientation_gt - orientation_pred + 180) % 360 - 180).square()
-            orientation_errors.append(orientation_error)
 
     # 计算平均距离误差
     mean_distance_error = total_distance / total_samples
-
-    # # 计算 RMSE
-    # squared_errors = torch.cat(squared_errors, dim=0)
-    # mse = squared_errors.mean().item()
-    # rmse = np.sqrt(mse)
-
     print(f"Average distance error (pixel)：{mean_distance_error:.4f}")
-    # print(f"RMSE (pixel)：{rmse:.4f}")
 
-    orientation_errors = torch.cat(orientation_errors, dim=0)
-    mse = orientation_errors.mean()
-    heading_angle_error = torch.sqrt(mse).item()
+    rotation_error = total_squared_orientation_error / total_samples
+    print(f"Rotation angle error (degree): {rotation_error}")
 
-    return mean_distance_error, heading_angle_error
+    return mean_distance_error, rotation_error

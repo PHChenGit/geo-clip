@@ -38,13 +38,13 @@ def main():
     model.to(device)
 
     train_ds = GeoDataLoader(
-        dataset_file='/home/rvl/Documents/rvl/pohsun/datasets/with_angle/train/taipei.csv',
-        dataset_folder='/home/rvl/Documents/rvl/pohsun/datasets/with_angle/train',
+        dataset_file='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/train/taipei.csv',
+        dataset_folder='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/train',
         transform=img_train_transform()
     )
     val_ds = GeoDataLoader(
-        dataset_file='/home/rvl/Documents/rvl/pohsun/datasets/with_angle/val/taipei.csv',
-        dataset_folder='/home/rvl/Documents/rvl/pohsun/datasets/with_angle/val',
+        dataset_file='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/val/taipei.csv',
+        dataset_folder='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/val',
         transform=img_val_transform()
     )
 
@@ -58,7 +58,7 @@ def main():
     val_dataloader = DataLoader(
         val_ds,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
     )
@@ -100,6 +100,7 @@ def main():
             model,
             optimizer,
             epoch,
+            args.num_epochs,
             args.batch_size,
             device,
             scaler,
@@ -126,7 +127,7 @@ def main():
         # self.image_encoder.mlp.load_state_dict(torch.load(f"{self.weights_folder}/image_encoder_mlp_weights.pth"))
         # self.location_encoder.load_state_dict(torch.load(f"{self.weights_folder}/location_encoder_weights.pth"))
         # self.logit_scale = nn.Parameter(torch.load(f"{self.weights_folder}/logit_scale_weights.pth"))
-        checkpoint_path = os.path.join(args.output_dir, f'geoclip_gpt_img_size_350.pth')
+        checkpoint_path = os.path.join(args.output_dir, '20241024', f'geoclip_gpt_img_size_326.pth')
         torch.save(model.state_dict(), checkpoint_path)
 
         if scheduler is not None:
@@ -145,7 +146,7 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.xticks(epochs)
-    plt.savefig(os.path.join(args.output_dir, 'training_loss.png'))
+    plt.savefig(os.path.join(args.output_dir, "20241024", 'training_loss.png'))
     plt.show()
 
     plt.figure(figsize=(10, 5))
@@ -156,10 +157,9 @@ def main():
     plt.title('Evaluation Metrics over Epochs')
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(args.output_dir, 'evaluation_metrics_image_size_350.png'))
+    plt.savefig(os.path.join(args.output_dir, 'evaluation_metrics_image_size_326.png'))
     plt.show()
 
-    np.save('./output/orientation_rmses.npy', orientation_rmses)
     plt.figure(figsize=(10, 5))
     plt.plot(epochs, orientation_rmses, label='Orientation RMSE')
     plt.xlabel('Epoch')
@@ -167,7 +167,7 @@ def main():
     plt.title('Evaluation Orientation over Epochs')
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(args.output_dir, 'evaluation_orientation_image_size_350.png'))
+    plt.savefig(os.path.join(args.output_dir, "20241024", 'evaluation_orientation_image_size_326.png'))
     plt.show()
 
 if __name__ == '__main__':
