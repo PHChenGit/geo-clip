@@ -1,5 +1,5 @@
 build/
 dist/
 geoclip.egg-info/
-*/__pycache/
+*/__pycache/*
 output/
