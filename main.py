@@ -38,13 +38,13 @@ def main():
     model.to(device)
 
     train_ds = GeoDataLoader(
-        dataset_file='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/train/taipei.csv',
-        dataset_folder='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/train',
+        dataset_file='../datasets/with_angle_2/train/taipei.csv',
+        dataset_folder='../datasets/with_angle_2/train',
         transform=img_train_transform()
     )
     val_ds = GeoDataLoader(
-        dataset_file='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/val/taipei.csv',
-        dataset_folder='/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/val',
+        dataset_file='../datasets/with_angle_2/val/taipei.csv',
+        dataset_folder='../datasets/with_angle_2/val',
         transform=img_val_transform()
     )
 
@@ -79,7 +79,7 @@ def main():
     orientation_losses = []
     total_losses = []
 
-    gps_gallery_path = os.path.join("/home/rvl/Documents/rvl/pohsun/datasets/with_angle/", "gps_gallery.csv")
+    gps_gallery_path = os.path.join("../datasets/with_angle/", "gps_gallery.csv")
     if not os.path.exists(gps_gallery_path):
         all_gps = []
         for _, gps, _ in tqdm(train_dataloader, desc="gps gallery"):

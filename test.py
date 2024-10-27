@@ -5,6 +5,7 @@ import random
 import torch
 import torch.nn.functional as F
 import numpy as np
+import pandas as pd
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from PIL import Image
@@ -16,15 +17,22 @@ from geoclip.model.GeoCLIP import GeoCLIP
 from geoclip.train.dataloader import GeoDataLoader, img_test_transform
 
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def visualize():
+def visualize(output):
     COLOR_GREEN = (0, 255, 0)
     COLOR_RED = (0, 0, 255)
     COLOR_BLUE = (255, 0, 0)
-    image_path = "/home/rvl/Documents/rvl/datasets/pohsun/taipei_satellite_imgs/Taipie_202408.jpg"
+    image_path = "../../datasets/pohsun/taipei_satellite_imgs/Taipie_202408.jpg"
+
+    if not os.path.exists(os.path.join(image_path)):
+        print(f"Image file not exists: {image_path}")
+        exit(-1)
+
     sat_img = cv2.imread(image_path)
+
     img = sat_img.copy()
     rad = 10
     thickness = 10
@@ -48,13 +56,24 @@ def visualize():
         )
         cv2.line(img, center_1, center_2, COLOR_BLUE, thickness=thickness)
 
-    cv2.imwrite("./output/20241024/test_result.png", img)
+    cv2.imwrite(os.path.join(output, "test_result.png"), img)
+
 
 def distance_acc(lo_1, lo_2):
     error = torch.sub(lo_1, lo_2)
     error = torch.square(error)
     error = torch.add(error[0], error[1])
     error = torch.sqrt(error)
+    return error
+
+def orientation_loss(pred, target):
+    N = torch.divide(pred, 360)
+    pred = torch.where(pred >= 360, pred - (N * 360), pred)
+    pred = torch.where(pred < 0, pred + (torch.abs(N) * 360), pred)
+    
+    error1 = torch.abs(target - pred)
+    error2 = torch.sub(360, error1)
+    error = torch.min(error1, error2)
     return error
 
 
@@ -64,7 +83,8 @@ model = GeoCLIP(from_pretrained=True)
 model.load_state_dict(
     torch.load(
         os.path.join(
-            "/home/rvl/Documents/rvl/pohsun/geo-clip/output/",
+            "./output/",
+            "20241024_regression_sin_cos",
             "geoclip_gpt_img_size_326.pth",
         )
     )
@@ -75,8 +95,8 @@ model.eval()  # Set model to evaluation mode
 
 # Load test data
 test_dataset = GeoDataLoader(
-    dataset_file="/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/test/taipei.csv",
-    dataset_folder="/home/rvl/Documents/rvl/pohsun/datasets/with_angle_2/test",
+    dataset_file="../datasets/with_angle_2/test/taipei.csv",
+    dataset_folder="../datasets/with_angle_2/test",
     transform=img_test_transform(),
 )
 
@@ -100,7 +120,8 @@ with torch.no_grad():
         locations = locations.cpu()
         orientations = orientations.cpu()
 
-        pred_location, pred_prob, pred_orientation = model.predict(images, top_k=1)
+        with torch.autocast(device_type="cuda"): 
+            pred_location, pred_prob, pred_orientation = model.predict(images, top_k=1)
         predicted_locations.extend(pred_location)
         true_locations.extend(locations)
 
@@ -118,27 +139,30 @@ for idx in range(len(true_locations)):
 
 orientation_errors = []
 for idx in range(len(true_orientations)):
-    error = (true_orientations[idx] - predicted_orientations[idx] + 180) % 360 -180
-    orientation_errors.append(error.cpu())
+    error = orientation_loss(predicted_orientations[idx], true_orientations[idx])
+    # error = (true_orientations[idx] - predicted_orientations[idx] + 180) % 360 - 180
+    orientation_errors.append(error.cpu().item())
 
+output_dir = "./output/20241024_regression_sin_cos/test"
+orientation_df = pd.DataFrame(orientation_errors)
+orientation_df.to_csv(os.path.join(output_dir, "orientation_errors.csv"), header=None, index=False)
 # Calculate average errors
 avg_location_error = np.mean(location_errors)
-avg_orientation_error = np.mean(orientation_errors) 
+orientation_mae = np.mean(orientation_errors)
 
 print(f"Average Location Error: {avg_location_error:.4f}")
-print(f"Average Orientation Error: {avg_orientation_error:.4f} degrees")
+print(f"Orientation MAE (degree): {orientation_mae:.4f} degrees")
 
-output_dir = "./output/20241024"
-samples = range(1, num_samples+1)
+samples = range(1, num_samples + 1)
 
 plt.figure(figsize=(10, 5))
 plt.plot(samples, location_errors, label="Predict Distance Error")
 plt.xlabel("Samples")
 plt.ylabel("Error (pixels)")
-plt.title("Testing Metrics over Epochs")
+plt.title("Testing Distance Metrics over Epochs")
 plt.legend()
 plt.grid(True)
-plt.savefig(os.path.join(output_dir, "test_metrics_image_size_326.png"))
+plt.savefig(os.path.join(output_dir, "test_distance_image_size_326.png"))
 plt.show()
 
 plt.figure(figsize=(10, 5))
@@ -148,7 +172,7 @@ plt.ylabel("Error (degree)")
 plt.title("Evaluation Orientation over Epochs")
 plt.legend()
 plt.grid(True)
-plt.savefig(os.path.join(output_dir, "evaluation_orientation_image_size_326.png"))
+plt.savefig(os.path.join(output_dir, "test_orientation_image_size_326.png"))
 plt.show()
 
-visualize()
+visualize(output_dir)
