@@ -5,8 +5,11 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 
-def train(train_dataloader, model, optimizer, epoch, batch_size, device, scaler, scheduler=None, criterion=nn.CrossEntropyLoss()):
-    print("Starting Epoch", epoch)
+from .loss import orientation_loss
+
+
+def train(train_dataloader, model, optimizer, epoch, total_epochs, batch_size, device, scaler, scheduler=None, criterion=nn.CrossEntropyLoss()):
+    # print("Starting Epoch", epoch)
 
     bar = tqdm(enumerate(train_dataloader), total=len(train_dataloader))
 
@@ -29,25 +32,15 @@ def train(train_dataloader, model, optimizer, epoch, batch_size, device, scaler,
         gps_all = torch.cat([gps, gps_queue], dim=0).to(device)
         model.dequeue_and_enqueue(gps)
 
-        # Prepare ground truth orientation
-        # Convert angles from degrees to radians
-        orientation_rad = orientation * (np.pi / 180.0)
-        # Compute sin θ and cos θ
-        sin_theta = torch.sin(orientation_rad)
-        cos_theta = torch.cos(orientation_rad)
-        orientation_gt = torch.stack((sin_theta, cos_theta), dim=1).to(device)
-
         # Forward pass
         with torch.autocast(device_type="cuda"): 
-            logits_img_gps, orientation_pred = model(imgs, gps_all)
+            logits_img_gps, logits_orientation = model(imgs, gps_all)
 
             # Compute the loss
             img_gps_loss = criterion(logits_img_gps, targets_img_gps)
-            # orientation_loss = torch.mean(((orientation_gt - orientation_pred + 180) % 360 - 180).square(), dtype=torch.float32).sqrt()
-            orientation_loss = torch.min(torch.abs(orientation_gt - orientation_pred).mean(), 360 - torch.abs(orientation_gt - orientation_pred).mean())
-
+            angle_mae, angle_error = orientation_loss(logits_orientation, orientation)
             alpha = 0.1 # weighting factor for orientation loss
-            loss = img_gps_loss + alpha * orientation_loss
+            loss = img_gps_loss + alpha * angle_mae.item()
 
         # Backpropagate
         scaler.scale(loss).backward()
@@ -58,11 +51,11 @@ def train(train_dataloader, model, optimizer, epoch, batch_size, device, scaler,
 
         # Accumulate losses
         epoch_contrastive_loss += img_gps_loss.item()
-        epoch_orientation_loss += orientation_loss.item()
+        epoch_orientation_loss += angle_mae.item()
         epoch_total_loss += loss.item()
         num_batches += 1
 
-        bar.set_description("Epoch {} loss: {:.5f}".format(epoch, loss.item()))
+        bar.set_description(f"Epoch {epoch}/{total_epochs} loss: {loss.item():.5f}")
 
     if scheduler is not None:
         scheduler.step()

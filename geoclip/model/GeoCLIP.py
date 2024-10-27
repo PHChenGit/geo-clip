@@ -4,6 +4,7 @@ import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 from .image_encoder import ImageEncoder
+from .orientation_encoder import OrientationEncoder
 from .location_encoder import LocationEncoder
 from .misc import load_gps_data, file_dir
 
@@ -16,9 +17,10 @@ class GeoCLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         self.image_encoder = ImageEncoder()
         self.location_encoder = LocationEncoder()
+        self.orientation_encoder = OrientationEncoder()
 
         # self.gps_gallery = load_gps_data(os.path.join(file_dir, "gps_gallery", "coordinates_100K.csv"))
-        self.gps_gallery = load_gps_data(os.path.join("/home/rvl/Documents/rvl/pohsun/datasets/with_angle/", "gps_gallery.csv"))
+        self.gps_gallery = load_gps_data(os.path.join("../datasets/with_angle/", "gps_gallery.csv"))
         self._initialize_gps_queue(queue_size)
 
         # if from_pretrained:
@@ -31,6 +33,7 @@ class GeoCLIP(nn.Module):
         self.device = device
         self.image_encoder.to(device)
         self.location_encoder.to(device)
+        self.orientation_encoder.to(device)
         self.logit_scale.data = self.logit_scale.data.to(device)
         self.gps_gallery.to(device)
         return super().to(device)
@@ -39,6 +42,7 @@ class GeoCLIP(nn.Module):
         self.image_encoder.mlp.load_state_dict(torch.load(f"{self.weights_folder}/image_encoder_mlp_weights.pth"))
         self.location_encoder.load_state_dict(torch.load(f"{self.weights_folder}/location_encoder_weights.pth"))
         self.logit_scale = nn.Parameter(torch.load(f"{self.weights_folder}/logit_scale_weights.pth"))
+        self.orientation_encoder.rotation_head.load_state_dict(torch.load(f"{self.weights_folder}/orientation_encoder_rotation_head_weights.pth"))
 
     def _initialize_gps_queue(self, queue_size):
         self.queue_size = queue_size
@@ -81,18 +85,20 @@ class GeoCLIP(nn.Module):
         """
 
         # Compute Features
-        image_features, orientation_pred = self.image_encoder(image)
+        image_features = self.image_encoder(image)
         location_features = self.location_encoder(location)
+        orientation_features = self.orientation_encoder(image)
         logit_scale = self.logit_scale.exp()
         
         # Normalize features
         image_features = F.normalize(image_features, dim=1)
         location_features = F.normalize(location_features, dim=1)
+        orientation_features = F.normalize(orientation_features, dim=1)
         
         # Cosine similarity (Image Features & Location Features)
         logits_per_image = logit_scale * (image_features @ location_features.t())
 
-        return logits_per_image, orientation_pred
+        return logits_per_image, orientation_features
 
     @torch.no_grad()
     def predict(self, image, top_k):

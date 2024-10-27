@@ -4,16 +4,25 @@ import torch.nn.functional as F
 from transformers import CLIPModel, AutoProcessor
 
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module='huggingface_hub.*')
 
-class ImageEncoder(nn.Module):
+warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub.*")
+
+
+class OrientationEncoder(nn.Module):
+
     def __init__(self):
-        super(ImageEncoder, self).__init__()
+        super(OrientationEncoder, self).__init__()
         self.CLIP = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
-        self.image_processor = AutoProcessor.from_pretrained("openai/clip-vit-large-patch14")
-        self.mlp = nn.Sequential(nn.Linear(768, 768),
-                                 nn.ReLU(),
-                                 nn.Linear(768, 512))
+        self.image_processor = AutoProcessor.from_pretrained(
+            "openai/clip-vit-large-patch14"
+        )
+        self.rotation_head = nn.Sequential(
+            nn.Linear(768, 768),
+            nn.ReLU(),
+            nn.Linear(768, 512),
+            nn.ReLU(),
+            nn.Linear(512, 2)
+        )
 
         # Freeze CLIP
         for param in self.CLIP.parameters():
@@ -25,6 +34,6 @@ class ImageEncoder(nn.Module):
 
     def forward(self, x):
         x = self.CLIP.get_image_features(pixel_values=x)
-        x = self.mlp(x)
+        x = self.rotation_head(x)
 
-        return x
+        return x 
